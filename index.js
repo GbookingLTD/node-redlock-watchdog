@@ -12,12 +12,13 @@ let redisClient = null;
  */
 let Promise = null;
 
-
+let onlyHeartbeat;
 let delayMs;
 let redlockHashKey;
 let maxStaleRetries;
 
 function reset() {
+  onlyHeartbeat = false;
   delayMs = 60000; // 1min
   redlockHashKey = 'redlock_list';
   maxStaleRetries = 5; // wait 5min until remove zombie redlock
@@ -42,6 +43,7 @@ let ns = (rc, pr, options) => {
   redisClient = rc;
   Promise = pr;
   options = options || {};
+  if (typeof options.onlyHeartbeat === 'boolean') onlyHeartbeat = options.onlyHeartbeat;
   if (options.delayMs) delayMs = options.delayMs;
   if (options.redlockHashKey) redlockHashKey = options.redlockHashKey;
   if (options.maxStaleRetries) {
@@ -83,6 +85,16 @@ ns.removeHeartbeat = function (redlock_key) {
   return denodeify(redisClient.hdel.bind(redisClient, redlockHashKey, redlock_key));
 };
 
+/**
+ * Update counters of heartbeats.
+ * @return {Promise[]}
+ */
+const heartbeat = () =>
+  Object.keys(heartbeats).map((key) =>
+    denodeify(redisClient.hincrby.bind(redisClient, 'redlock_list', key, 1)));
+
+ns.heartbeat = heartbeat;
+
 let listeners = {
   removeStaled: null
 };
@@ -117,12 +129,15 @@ let checkPromise = null;
  * @private
  */
 const check = function () {
-  // Update counters of heartbeats.
-  let jobs = Object.keys(heartbeats).map((key) =>
-    denodeify(redisClient.hincrby.bind(redisClient, 'redlock_list', key, 1)));
-
+  let jobs = heartbeat();
+  
   // Check if there are expired redlocks, remove redlocks by key and after that remove keys from list
-  return checkPromise = Promise.all(jobs)
+  checkPromise = Promise.all(jobs);
+  
+  if (onlyHeartbeat)
+    return checkPromise;
+  
+  return checkPromise
     .then(() => denodeify(redisClient.hgetall.bind(redisClient, redlockHashKey)))
     .then(function (items) {
       // Если текущий счетчик НЕ отличается от предыдущего, то увеличиваем количество таких проверок по ключу.
