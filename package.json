@@ -1,0 +1,25 @@
+{
+  "name": "redlock-watchdog",
+  "version": "0.1.0",
+  "description": "Redlock watchdog",
+  "main": "index.js",
+  "directories": {
+    "test": "test"
+  },
+  "scripts": {
+    "test": "make mocha_test && make mocha_test_promise_q"
+  },
+  "keywords": [
+    "redlock",
+    "watchdog"
+  ],
+  "author": "swvitaliy",
+  "license": "ISC",
+  "devDependencies": {
+    "promise": "^8.0.2",
+    "q": "^1.5.1",
+    "redis": "^2.8.0",
+    "redlock": "^3.1.2",
+    "should": "^13.2.3"
+  }
+}
