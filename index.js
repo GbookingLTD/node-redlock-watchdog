@@ -91,7 +91,7 @@ ns.addHeartbeat = function (redlock_key, info) {
   let job = denodeify(redisClient.hset.bind(redisClient, redlockHashKey, redlock_key, "0"));
   if (info) {
     job.then(() =>
-      redisClient.hset.bind(redisClient, redlockInfoKey, redlock_key, 's:' + info.server + '|p:' + info.pid));
+      denodeify(redisClient.hset.bind(redisClient, redlockInfoKey, redlock_key, 's:' + info.server + '|p:' + info.pid)));
   }
   return job;
 };
@@ -100,7 +100,7 @@ ns.removeHeartbeat = function (redlock_key) {
   delete heartbeats[redlock_key];
   return denodeify(redisClient.hdel.bind(redisClient, redlockHashKey, redlock_key))
     .then(() => 
-      redisClient.hdel.bind(redisClient, redlockInfoKey, redlock_key));
+      denodeify(redisClient.hdel.bind(redisClient, redlockInfoKey, redlock_key)));
 };
 
 /**

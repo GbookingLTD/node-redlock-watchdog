@@ -1,6 +1,6 @@
 {
   "name": "redlock-watchdog",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "description": "Redlock watchdog",
   "main": "index.js",
   "directories": {
