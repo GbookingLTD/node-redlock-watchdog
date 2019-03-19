@@ -15,6 +15,7 @@ let Promise = null;
 let onlyHeartbeat;
 let delayMs;
 let redlockHashKey;
+let redlockInfoKey;
 let maxStaleRetries;
 let debug;
 
@@ -22,6 +23,7 @@ function reset() {
   onlyHeartbeat = false;
   delayMs = 60000; // 1min
   redlockHashKey = 'redlock_list';
+  redlockInfoKey = 'redlock_info';
   maxStaleRetries = 5; // wait 5min until remove zombie redlock
   debug = false;
 }
@@ -78,14 +80,27 @@ const denodeify = function (fn) {
 // redlock_key, value - {redlock_key, counter}
 let heartbeats = {};
 
-ns.addHeartbeat = function (redlock_key) {
+/**
+ * 
+ * @param {string} redlock_key
+ * @param {{server:string, pid:number}} info
+ * @return {Promise}
+ */
+ns.addHeartbeat = function (redlock_key, info) {
   heartbeats[redlock_key] = 1;
-  return denodeify(redisClient.hset.bind(redisClient, redlockHashKey, redlock_key, "0"));
+  let job = denodeify(redisClient.hset.bind(redisClient, redlockHashKey, redlock_key, "0"));
+  if (info) {
+    job.then(() =>
+      redisClient.hset.bind(redisClient, redlockInfoKey, redlock_key, 's:' + info.server + '|p:' + info.pid));
+  }
+  return job;
 };
 
 ns.removeHeartbeat = function (redlock_key) {
   delete heartbeats[redlock_key];
-  return denodeify(redisClient.hdel.bind(redisClient, redlockHashKey, redlock_key));
+  return denodeify(redisClient.hdel.bind(redisClient, redlockHashKey, redlock_key))
+    .then(() => 
+      redisClient.hdel.bind(redisClient, redlockInfoKey, redlock_key));
 };
 
 /**
@@ -170,8 +185,11 @@ const check = function () {
           jobs.push(new Promise(function(resolve, reject) {
             return denodeify(redisClient.del.bind(redisClient, key))
               
-              .then(() => 
+              .then(() =>
                 denodeify(redisClient.hdel.bind(redisClient, redlockHashKey, key)))
+
+              .then(() => 
+                denodeify(redisClient.hdel.bind(redisClient, redlockInfoKey, key)))
               
               .then(() => {
                 // after successful removing the key also remove it from "stales" object
@@ -182,7 +200,7 @@ const check = function () {
               })
               
               .catch((err) => {
-                console.error("redlock-watchdog delete key %s failed with error " + err, key); 
+                console.error("redlock_watchdog delete key %s failed with error " + err, key); 
                 reject(err);
               });
           }));
@@ -208,7 +226,7 @@ const check = function () {
       return Promise.all(jobs);
     })
     .catch((err) =>
-      console.error("redlock-watchdog check failed with error ", err));
+      console.error("redlock_watchdog check failed with error ", err));
 };
 
 let runned = false;
