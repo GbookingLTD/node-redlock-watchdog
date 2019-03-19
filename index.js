@@ -16,12 +16,14 @@ let onlyHeartbeat;
 let delayMs;
 let redlockHashKey;
 let maxStaleRetries;
+let debug;
 
 function reset() {
   onlyHeartbeat = false;
   delayMs = 60000; // 1min
   redlockHashKey = 'redlock_list';
   maxStaleRetries = 5; // wait 5min until remove zombie redlock
+  debug = false;
 }
 
 reset();
@@ -52,6 +54,7 @@ let ns = (rc, pr, options) => {
     }
     maxStaleRetries = options.maxStaleRetries;
   }
+  if (typeof options.debug === 'boolean') debug = options.debug;
   return ns;
 };
 
@@ -131,6 +134,8 @@ let checkPromise = null;
 const check = function () {
   let jobs = heartbeat();
   
+  debug && console.debug('redlock_watchdog heartbeats %j', heartbeats);
+  
   // Check if there are expired redlocks, remove redlocks by key and after that remove keys from list
   checkPromise = Promise.all(jobs);
   
@@ -197,6 +202,8 @@ const check = function () {
         delete stales[removed[i]];
       }
 
+      debug && console.debug('redlock_watchdog stales %j', stales);
+      
       previousItems = items;
       return Promise.all(jobs);
     })
