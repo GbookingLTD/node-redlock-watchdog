@@ -180,7 +180,7 @@ const check = function () {
           return denodeify(redisClient.exists.bind(redisClient, key))
 
             .then((status) => {
-              if (status === '0') {
+              if (status === 0) {
                 return denodeify(redisClient.hdel.bind(redisClient, redlockHashKey, key))
                   .then(() =>
                     denodeify(redisClient.hdel.bind(redisClient, redlockInfoKey, key)))
