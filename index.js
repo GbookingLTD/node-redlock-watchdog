@@ -173,6 +173,33 @@ const check = function () {
         if (!items.hasOwnProperty(key)) continue;
         let val = items[key];
 
+        // Если ключа нет, то удаляем из redlock_list и из redlock_info.
+        // Это соответствует "плохому" случаю, когда процесс по какой-либо причине не удаляет редлок 
+        // (он, скорее всего удаляется по истечении ttl).
+        jobs.push(new Promise(function(resolve) {
+          return denodeify(redisClient.exists.bind(redisClient, key))
+
+            .then((status) => {
+              if (status === '0') {
+                return denodeify(redisClient.hdel.bind(redisClient, redlockHashKey, key))
+                  .then(() =>
+                    denodeify(redisClient.hdel.bind(redisClient, redlockInfoKey, key)))
+
+                  .then(() => {
+                    console.warn("redlock_watchdog delete forgotten redlock_list key %s", key);
+                    resolve();
+                  })
+
+                  .catch((err) => {
+                    console.error("redlock_watchdog delete forgotten redlock_list key %s failed with error " + err, key); 
+                    resolve();
+                  });
+              }
+
+              resolve();
+            })
+        }));
+        
         let prev = previousItems[key] || "0";
         if (+prev !== +val) {
           stales[key] = 0;
